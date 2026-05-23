@@ -1,0 +1,20 @@
+name: CD Deploy
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: course.prafdin.ru
+          username: kali
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 3126
+          script: |
+            cd ~/catty-reminders-app
+            chmod +x ./scripts/deploy.sh
+            ./scripts/deploy.sh lab2 ${{ github.sha }}
