@@ -14,3 +14,9 @@ name = "app-tsvetkov"
 type = "http"
 localPort = 8181
 customDomains = ["app.tsvetkov.course.prafdin.ru"]
+
+[[proxies]]
+name = "ssh-tsvetkov"
+type = "tcp"
+localPort = 22
+remotePort = 3126
