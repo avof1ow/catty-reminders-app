@@ -1,29 +1,30 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BRANCH="${1:-lab2}"
-REQUESTED_SHA="${2:-}"
 APP_DIR="/home/kali/catty-reminders-app"
-APP_SERVICE="catty-app.service"
-
-echo "Deploying branch '$BRANCH' into '$APP_DIR'"
-
+echo "Deploying via Docker into '$APP_DIR'"
 cd "$APP_DIR"
-git fetch origin
-git checkout -B "$BRANCH" "origin/$BRANCH"
 
-if [[ -n "$REQUESTED_SHA" ]]; then
-    git reset --hard "$REQUESTED_SHA"
-    echo "DEPLOY_REF=$REQUESTED_SHA" > .env
-fi
+# Авторизация в реестре через переданный токен с использованием sudo
+echo "$GITHUB_TOKEN" | sudo docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-# venv
-if [[ ! -d ".venv" ]]; then
-    python3 -m venv .venv
-fi
+echo "Pulling Docker image: $IMAGE"
+sudo docker pull "$IMAGE"
 
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt --prefer-binary --no-cache-dir
+echo "Stopping old container..."
+sudo docker stop catty-test || true
+sudo docker rm catty-test || true
 
-sudo systemctl restart "$APP_SERVICE"
-echo "Deployment completed!"
+# Контрольная очистка портов (на случай зависших фоновых процессов)
+sudo fuser -k -9 8181/tcp || true
+sleep 2
+
+echo "Starting new Docker container..."
+sudo docker run -d \
+  -p 8181:8181 \
+  --name catty-test \
+  --restart unless-stopped \
+  -e DEPLOY_REF="$DEPLOY_REF" \
+  "$IMAGE"
+
+echo "Docker deployment completed successfully!"
