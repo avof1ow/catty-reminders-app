@@ -1,7 +1,7 @@
 services:
   app:
     container_name: catty-app
-    image: ghcr.io/avofl1ow/catty-reminders-app:${DEPLOY_REF:-latest}
+    build: .
     restart: unless-stopped
     depends_on:
       db:
