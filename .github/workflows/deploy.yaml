@@ -32,7 +32,7 @@ jobs:
           host: "course.prafdin.ru"
           username: "kali"
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 3200
+          port: 3126
           envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DEPLOY_REF
           script: |
             cd /home/kali/catty-reminders-app
