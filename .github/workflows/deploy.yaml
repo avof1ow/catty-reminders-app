@@ -36,7 +36,4 @@ jobs:
           envs: GITHUB_TOKEN,GITHUB_ACTOR,IMAGE,DEPLOY_REF
           script: |
             cd /home/kali/catty-reminders-app
-            git fetch origin
-            git checkout -f lab3
-            git reset --hard origin/lab3
             bash scripts/deploy.sh
