@@ -1,7 +1,10 @@
 services:
   app:
     container_name: catty-app
-    build: .
+    build:
+      context: .
+      args:
+        - DEPLOY_REF=${DEPLOY_REF:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -13,6 +16,7 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - DEPLOY_REF=${DEPLOY_REF:-latest}
     volumes:
       - ./config.json:/catty-reminders-app/config.json:ro
     networks:
@@ -28,7 +32,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u${MYSQL_USER} -p${MYSQL_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD}"]
       interval: 5s
       timeout: 5s
       retries: 10
