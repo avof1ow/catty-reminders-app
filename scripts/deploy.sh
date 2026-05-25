@@ -24,7 +24,6 @@ sudo docker run -d \
   -p 8181:8181 \
   --name catty-test \
   --restart unless-stopped \
-  -e DEPLOY_REF="$DEPLOY_REF" \
   "$IMAGE"
 
 echo "Docker deployment completed successfully!"
