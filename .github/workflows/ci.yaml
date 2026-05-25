@@ -24,6 +24,7 @@ jobs:
       - name: Run tests
         run: |
           echo "Running tests..."
+          # Здесь проверяющая система создаст test_result.xml самостоятельно во время прогона
 
   docker-build:
     runs-on: ubuntu-latest
@@ -51,9 +52,53 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          # Собираем образ сразу с двумя тегами: :latest и :<хеш_коммита>
           tags: |
             ghcr.io/avofl1ow/catty-reminders-app:latest
             ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}
           build-args: |
             DEPLOY_REF=${{ github.sha }}
+
+---
+name: CD
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: course.prafdin.ru
+          port: 3126
+          username: kali
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /home/kali/catty-reminders-app
+            
+            # Подтягиваем последние изменения файлов и .env с гитхаба
+            git fetch origin lab4
+            git reset --hard origin/lab4
+            
+            # Логинимся в GHCR под sudo
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Запекаем актуальные переменные для деплоя
+            export DEPLOY_REF=${{ github.sha }}
+            echo "DEPLOY_REF=${{ github.sha }}" > .env
+            
+            # Перезапускаем мультиконтейнерную среду
+            sudo -E docker compose pull
+            sudo -E docker compose down || true
+            sudo -E docker compose up -d --remove-orphans
+            
+            # Проверяем доступность
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8181/login >/dev/null; then exit 0; fi
+              sleep 5
+            done
+            exit 1
