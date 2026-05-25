@@ -2,7 +2,8 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: ['**']
+    branches:
+      - lab4
   release:
     types: [published]
 
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   test:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -36,9 +38,9 @@ jobs:
           path: test_result.xml
 
   docker-build:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,7 +56,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -66,12 +68,11 @@ jobs:
             DEPLOY_REF=${{ github.sha }}
 
   deploy:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.event_name == 'push' || github.event_name == 'release'
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: course.prafdin.ru
           port: 3126
@@ -80,25 +81,31 @@ jobs:
           script: |
             set -e
             cd /home/kali/catty-reminders-app
-            # Обновляем файлы репозитория локально на Kali
-            git fetch origin lab4 || git fetch origin main
-            git reset --hard FETCH_HEAD
-            # Логинимся в реестр пакетов под sudo для скачивания образа
+            
+            # Скачиваем изменения файлов 4 лабы
+            git fetch origin lab4
+            git reset --hard origin/lab4
+            
+            # Авторизуемся в реестре под sudo
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            # Формируем чистый файл окружения .env
-            sudo bash -c "cat << 'EOF' > .env
-            IMAGE=ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}
-            DEPLOY_REF=${{ github.sha }}
+            
+            # Получаем SHA коммита из релиза
+            RELEASE_SHA=$(git rev-parse HEAD)
+            
+            # Перезаписываем .env файл на Kali
+            sudo bash -c "cat << EOF > .env
+            IMAGE=ghcr.io/avofl1ow/catty-reminders-app:\${RELEASE_SHA}
+            DEPLOY_REF=\${RELEASE_SHA}
             MYSQL_ROOT_PASSWORD=root_password
             MYSQL_DATABASE=catty_reminders
             MYSQL_USER=catty
             MYSQL_PASSWORD=cattypass
             EOF"
-            # Перезапускаем контейнеры через docker compose
+            
+            # Поднимаем мультиконтейнерную среду через Compose
             sudo docker compose down --remove-orphans
             sudo docker compose pull
             sudo docker compose up -d
-            # Даем контейнеру с базой данных 10 секунд на полную инициализацию структуры
+            # Ждем старта
             sleep 10
-            # Проверяем локальный ответ приложения, чтобы убедиться в отсутствии ошибки 500/404
             curl -fsS http://127.0.0.1:8181/login > /dev/null
