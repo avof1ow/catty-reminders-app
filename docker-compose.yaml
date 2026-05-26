@@ -1,6 +1,5 @@
 services:
   app:
-    container_name: catty-app
     image: ghcr.io/avofl1ow/catty-reminders-app:${DEPLOY_REF:-latest}
     restart: unless-stopped
     depends_on:
@@ -13,7 +12,6 @@ services:
       - MYSQL_USER=${MYSQL_USER:-catty}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-cattypass}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-catty_reminders}
-      - DEPLOY_REF=${DEPLOY_REF:-latest}
     volumes:
       - ./config.json:/catty-reminders-app/config.json:ro
     networks:
@@ -22,18 +20,18 @@ services:
   db:
     container_name: catty-db
     image: mysql:8.0
-    restart: always
+    restart: unless-stopped  # ИСПРАВЛЕНО: Данила просил убрать always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-catty_reminders}
       MYSQL_USER: ${MYSQL_USER:-catty}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cattypass}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-catty_reminders}
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER:-catty} -p$${MYSQL_PASSWORD:-cattypass}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$MYSQL_USER -p$MYSQL_PASSWORD || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 5
+      start_period: 15s
     volumes:
       - db-data:/var/lib/mysql
     networks:
