@@ -1,4 +1,5 @@
-name: CD
+name: CD Pipeline (Deploy)
+
 on:
   release:
     types: [published]
@@ -17,12 +18,24 @@ jobs:
           script: |
             set -e
             cd /home/kali/catty-reminders-app
+            # Обновляем репозиторий на хосте
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            git fetch origin $CURRENT_BRANCH
+            git reset --hard FETCH_HEAD
+            # Авторизуемся в реестре пакетов
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            sudo env DEPLOY_REF=${{ github.sha }} docker compose pull app
-            sudo env DEPLOY_REF=${{ github.sha }} docker compose down || true
-            sudo env DEPLOY_REF=${{ github.sha }} docker compose up -d --remove-orphans
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8181/login >/dev/null; then exit 0; fi
-              sleep 5
-            done
-            exit 1
+            # Пересоздаем чистый файл .env с актуальным хэшем для Compose
+            sudo bash -c "cat << EOF > .env
+            IMAGE=ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}
+            DEPLOY_REF=${{ github.sha }}
+            MYSQL_ROOT_PASSWORD=root_password
+            MYSQL_DATABASE=catty_reminders
+            MYSQL_USER=catty
+            MYSQL_PASSWORD=cattypass
+            EOF"
+            # Поднимаем обновленный стек без лишних инлайн-переменных
+            sudo docker compose down --remove-orphans || true
+            sudo docker compose pull app
+            sudo docker compose up -d
+            sleep 5
+            curl -fsS http://127.0.0.1:8181/login > /dev/null

@@ -1,10 +1,8 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
     branches: ['**']
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -17,17 +15,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate Valid Junit Test Result
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
         run: |
-          echo '<?xml version="1.0" encoding="UTF-8"?>' > test_result.xml
-          echo '<testsuites>' >> test_result.xml
-          echo '  <testsuite name="pytest" tests="3" errors="0" failures="0" skipped="0">' >> test_result.xml
-          echo '    <testcase classname="tests.test_main" name="test_app_is_alive" time="0.1"/>' >> test_result.xml
-          echo '    <testcase classname="tests.test_main" name="test_login" time="0.1"/>' >> test_result.xml
-          echo '    <testcase classname="tests.test_main" name="test_reminders" time="0.1"/>' >> test_result.xml
-          echo '  </testsuite>' >> test_result.xml
-          echo '</testsuites>' >> test_result.xml
-          exit 0
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest requests-mock
+
+      - name: Run Real Application Tests
+        run: |
+          python -m pytest --junitxml=test_result.xml
 
       - name: Upload test report
         if: always()
@@ -64,35 +65,3 @@ jobs:
             ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}
           build-args: |
             DEPLOY_REF=${{ github.sha }}
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: course.prafdin.ru
-          port: 3126
-          username: kali
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
-            cd /home/kali/catty-reminders-app
-            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-            git fetch origin $CURRENT_BRANCH
-            git reset --hard FETCH_HEAD
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            sudo bash -c "cat << EOF > .env
-            IMAGE=ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}
-            DEPLOY_REF=${{ github.sha }}
-            MYSQL_ROOT_PASSWORD=root_password
-            MYSQL_DATABASE=catty_reminders
-            MYSQL_USER=catty
-            MYSQL_PASSWORD=cattypass
-            EOF"
-            sudo docker compose down --remove-orphans
-            sudo docker compose pull
-            sudo docker compose up -d
-            sleep 5
-            curl -fsS http://127.0.0.1:8181/login > /dev/null
