@@ -1,15 +1,20 @@
 name: CD
 
 on:
-  push:
-    branches:
-      - '**'
   release:
     types: [published]
+ 
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches:
+      - '**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Выполняем деплой только при условии, что тесты и сборка образов в CI прошли успешно
+    if: ${{ github.event_name == 'release' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -27,9 +32,13 @@ jobs:
             git checkout lab4 || true
             git pull origin lab4 || true
             
+            # Получаем SHA коммита: если запуск от workflow_run — берем хэш собранного коммита, иначе текущий
+            IF_WORKFLOW_SHA="${{ github.event.workflow_run.head_sha }}"
+            TARGET_SHA="${IF_WORKFLOW_SHA:-${{ github.sha }}}"
+            
             # Формируем локальный .env файл для Compose
-            echo "DEPLOY_REF=${{ github.sha }}" > .env
-            echo "IMAGE=ghcr.io/avofl1ow/catty-reminders-app:${{ github.sha }}" >> .env
+            echo "DEPLOY_REF=$TARGET_SHA" > .env
+            echo "IMAGE=ghcr.io/avofl1ow/catty-reminders-app:$TARGET_SHA" >> .env
             
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u avofl1ow --password-stdin
             
