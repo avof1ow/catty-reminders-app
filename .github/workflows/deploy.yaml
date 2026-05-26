@@ -1,13 +1,18 @@
 name: Deploy
 on:
-  push:
-    branches: [ lab4* ]
   release:
     types: [published]
+  # Запускаем деплой на пуши, ТОЛЬКО когда воркфлоу CI полностью и успешно завершился
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [lab4*]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Защита: если это триггер от CI, выполняем деплой только при условии, что тесты и сборка прошли успешно
+    if: ${{ github.event_name == 'release' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - name: Deploy via SSH
@@ -28,20 +33,24 @@ jobs:
               
               OWNER=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
               
-              # Формируем окружение под твою эталонную структуру данных
+              # Получаем SHA коммита динамически, в зависимости от того, как запустился деплой
+              IF_WORKFLOW_SHA="${{ github.event.workflow_run.head_sha }}"
+              CURRENT_SHA="${IF_WORKFLOW_SHA:-${{ github.sha }}}"
+              
+              # Формируем окружение (OUTEOF пишется строго с начала строки без пробелов)
               sudo bash -c "cat << OUTEOF > .env
-              IMAGE=ghcr.io/$OWNER/catty-reminders-app:${{ github.sha }}
-              APP_CONTAINER_NAME=catty-app
-              DB_CONTAINER_NAME=catty-db
-              MARIADB_ROOT_PASSWORD=mypass
-              MARIADB_PASSWORD=mypass
-              MARIADB_USER=root
-              MARIADB_DATABASE=catty_reminders
-              HOST_DB_PORT=3306
-              CONTAINER_DB_PORT=3306
-              HOST_APP_PORT=8181
-              CONTAINER_APP_PORT=8181
-              OUTEOF"
+IMAGE=ghcr.io/$OWNER/catty-reminders-app:$CURRENT_SHA
+APP_CONTAINER_NAME=catty-app
+DB_CONTAINER_NAME=catty-db
+MARIADB_ROOT_PASSWORD=mypass
+MARIADB_PASSWORD=mypass
+MARIADB_USER=root
+MARIADB_DATABASE=catty_reminders
+HOST_DB_PORT=3306
+CONTAINER_DB_PORT=3306
+HOST_APP_PORT=8181
+CONTAINER_APP_PORT=8181
+OUTEOF"
 
               echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
               sudo docker compose down --remove-orphans || true
