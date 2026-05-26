@@ -1,45 +1,42 @@
 services:
-  app:
-    image: ghcr.io/avofl1ow/catty-reminders-app:${DEPLOY_REF:-latest}
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8181:8181"
-    environment:
-      - MYSQL_HOST=db
-      - MYSQL_USER=${MYSQL_USER:-catty}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-cattypass}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-catty_reminders}
-    volumes:
-      - ./config.json:/catty-reminders-app/config.json:ro
-    networks:
-      - app-network
-
   db:
-    container_name: catty-db
-    image: mysql:8.0
-    restart: unless-stopped  # ИСПРАВЛЕНО: Данила просил убрать always
+    image: mariadb:11
+    container_name: ${DB_CONTAINER_NAME}
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-catty_reminders}
-      MYSQL_USER: ${MYSQL_USER:-catty}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cattypass}
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    ports:
+      - "${HOST_DB_PORT}:${CONTAINER_DB_PORT}"
+    volumes:
+      - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$MYSQL_USER -p$MYSQL_PASSWORD || exit 1"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 15s
-    volumes:
-      - db-data:/var/lib/mysql
     networks:
-      - app-network
+      - catty-network
 
-volumes:
-  db-data:
+  catty-app:
+    image: ${IMAGE}
+    container_name: ${APP_CONTAINER_NAME}
+    restart: always
+    ports: 
+      - "${HOST_APP_PORT}:${CONTAINER_APP_PORT}"
+    volumes:
+      - ./config.json:/catty-reminders-app/config.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - catty-network
 
 networks:
-  app-network:
+  catty-network:
     driver: bridge
+
+volumes:
+  db_data:
