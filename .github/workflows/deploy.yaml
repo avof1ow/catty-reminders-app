@@ -2,7 +2,6 @@ name: Deploy
 on:
   release:
     types: [published]
-  # Запускаем деплой на пуши, ТОЛЬКО когда воркфлоу CI полностью и успешно завершился
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -11,7 +10,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Защита: если это триггер от CI, выполняем деплой только при условии, что тесты и сборка прошли успешно
     if: ${{ github.event_name == 'release' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
@@ -23,37 +21,29 @@ jobs:
           port: 3126
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            bash -c '
-              set -e
-              cd /home/kali/catty-reminders-app
-              
-              git fetch origin
-              git checkout lab4
-              git pull origin lab4 || true
-              
-              OWNER=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
-              
-              # Получаем SHA коммита динамически, в зависимости от того, как запустился деплой
-              IF_WORKFLOW_SHA="${{ github.event.workflow_run.head_sha }}"
-              CURRENT_SHA="${IF_WORKFLOW_SHA:-${{ github.sha }}}"
-              
-              # Формируем окружение (OUTEOF пишется строго с начала строки без пробелов)
-              sudo bash -c "cat << OUTEOF > .env
-IMAGE=ghcr.io/$OWNER/catty-reminders-app:$CURRENT_SHA
-APP_CONTAINER_NAME=catty-app
-DB_CONTAINER_NAME=catty-db
-MARIADB_ROOT_PASSWORD=mypass
-MARIADB_PASSWORD=mypass
-MARIADB_USER=root
-MARIADB_DATABASE=catty_reminders
-HOST_DB_PORT=3306
-CONTAINER_DB_PORT=3306
-HOST_APP_PORT=8181
-CONTAINER_APP_PORT=8181
-OUTEOF"
+            set -e
+            cd /home/kali/catty-reminders-app
+            
+            git fetch origin
+            git checkout lab4
+            git pull origin lab4 || true
+            
+            OWNER=$(echo "avofl1ow" | tr "[:upper:]" "[:lower:]")
+            
+            # Напрямую пишем в файл без опасных вложенных EOF
+            echo "IMAGE=ghcr.io/$OWNER/catty-reminders-app:${{ github.event.workflow_run.head_sha || github.sha }}" > .env
+            echo "APP_CONTAINER_NAME=catty-app" >> .env
+            echo "DB_CONTAINER_NAME=catty-db" >> .env
+            echo "MARIADB_ROOT_PASSWORD=mypass" >> .env
+            echo "MARIADB_PASSWORD=mypass" >> .env
+            echo "MARIADB_USER=root" >> .env
+            echo "MARIADB_DATABASE=catty_reminders" >> .env
+            echo "HOST_DB_PORT=3306" >> .env
+            echo "CONTAINER_DB_PORT=3306" >> .env
+            echo "HOST_APP_PORT=8181" >> .env
+            echo "CONTAINER_APP_PORT=8181" >> .env
 
-              echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-              sudo docker compose down --remove-orphans || true
-              sudo docker compose pull
-              sudo docker compose up -d --force-recreate 
-            '
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u avofl1ow --password-stdin
+            sudo docker compose down --remove-orphans || true
+            sudo docker compose pull
+            sudo docker compose up -d --force-recreate
