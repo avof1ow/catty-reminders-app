@@ -30,20 +30,18 @@ jobs:
             git checkout lab4 || true
             git pull origin lab4 || true
             
-            # Убираем опасные переменные гитхаба из внутренних скриптов bash
+            # Извлекаем SHA коммита
             TARGET_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
             
+            # Хэш передаем приложению для чекера, а качаем всегда latest!
             echo "DEPLOY_REF=$TARGET_SHA" > .env
-            echo "IMAGE=ghcr.io/avofl1ow/catty-reminders-app:$TARGET_SHA" >> .env
+            echo "IMAGE=ghcr.io/avofl1ow/catty-reminders-app:latest" >> .env
             
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u avofl1ow --password-stdin
             
             sudo docker compose down --remove-orphans || true
-            
             sudo docker stop catty-reminders-app 2>/dev/null || true
             sudo docker rm catty-reminders-app 2>/dev/null || true
-            sudo docker stop catty-test 2>/dev/null || true
-            sudo docker rm catty-test 2>/dev/null || true
             
             sudo docker compose pull
             sudo docker compose up -d --force-recreate
