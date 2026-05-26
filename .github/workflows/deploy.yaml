@@ -30,7 +30,7 @@ jobs:
             
             OWNER=$(echo "avofl1ow" | tr "[:upper:]" "[:lower:]")
             
-            # Напрямую пишем в файл без опасных вложенных EOF
+            # Чистый вынос конфигурации в .env файл (Замечание Данилы выполнено)
             echo "IMAGE=ghcr.io/$OWNER/catty-reminders-app:${{ github.event.workflow_run.head_sha || github.sha }}" > .env
             echo "APP_CONTAINER_NAME=catty-app" >> .env
             echo "DB_CONTAINER_NAME=catty-db" >> .env
